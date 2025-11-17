@@ -11,38 +11,73 @@ Module: Distributed Systems, CMPU4021
 import socket
 import sys
 import argparse
+import threading
 
 host = 'localhost'
 port = 5000 # hard-coded default port
 data_payload = 2048
 
+s = "[SELLER]"
+
+def handle_client(conn,addr):
+    print(f"{s}: New client connected - {addr}")
+
+    try:
+        while True:
+            msg = conn.recv(data_payload)
+
+            if not msg:
+                print(f"{s}: Client {addr} disconnected.")
+                break
+
+            msg_decoded = msg.decode("utf-8")
+            print(f"{s}: From {addr} - {msg_decoded}")
+
+            reply = f"{s}: welcomes you."
+            conn.sendall(reply.encode("utf-8"))
+
+    except Exception as e:
+        print(f"{s}: Error with client {addr}")
+    finally:
+        conn.close()
+        print(f"{s}: Connection with client {addr} closed.")
+    return
+
 def main():
 
-    # For a UDP socket, AF_INET = internet address family for IPV4, SOCK_STREAM = socket type for TCP
+    # For a TCP* socket, AF_INET = internet address family for IPV4, SOCK_STREAM = socket type for TCP
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_address = (host, port)
-    #binds the socket to the address above ^
 
-    print("Starting TCP Connection for server %s port %s" % server_address)
+    # setsockopt: makes it so that it avoids the bind() exception error where it says address is already in use
+
+    #binds the socket to the address above 
+    print(f"Starting TCP Connection for {s} %s port %s" % server_address)
     server.bind(server_address)
 
     # enables a server to accept connections 
     server.listen()
-    print("Seller listening for connections...")
-    conn, addr = server.accept()
-    print(f"Seller accepted connection by {addr}")
+    print(f"{s} listening for connections...")
 
-    msg_data = conn.recv(data_payload)
-    msg_decoded = msg_data.decode("utf-8")
+    try:
+        while True:
+            conn, addr = server.accept()
+            print(f"{s} accepted connection by {addr}")
 
-    print(f"Seller received a message: {msg_decoded}")
+            # creates a new thread, 
+            # target=handle_client -> what function the thread runs
+            # args=(conn, addr) -> passes the arguments to the target fns
+            # daemon=True -> background thread that doesnt stop the program from exiting
+            client_thread = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
+            #starts the actual thread, if .start() isn't called, the thread exists but isn't run.
+            client_thread.start()
 
-    seller_reply = "Seller says: Hello Buyer!"
-    conn.sendall(seller_reply.encode("utf-8"))
+    except KeyboardInterrupt:
+        print(f"{s} Shutting Down...")
 
-    conn.close()
-    server.close()
-    print("Seller has closed the connection.")
+    finally:
+        server.close()
+        print(f"{s} closed.")
 
 
 if __name__ == "__main__":

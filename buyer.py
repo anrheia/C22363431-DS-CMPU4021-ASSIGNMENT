@@ -15,23 +15,42 @@ import argparse
 host = 'localhost'
 port = 5000
 data_payload = 2048
+b = "[BUYER]"
 
 def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
     server_address = (host,port)
     client.connect(server_address)
-    print("Buyer connected to server %s port %s" % server_address)
+    print(f"{b}: connected to server {host} port {port}")
 
-    msg = "Buyer says: Hello World!"
-    client.sendall(msg.encode("utf-8"))
+    try:
+        while True:
+            msg = input(str(f"{b}: "))
 
-    reply_data = client.recv(data_payload)
-    reply_decoded = reply_data.decode("utf-8")
-    print(f"Buyer received a message: {reply_decoded}")
+            if not msg:
+                continue
 
-    client.close()
-    print("Buyer has closed the connection.")
+            if msg.lower() in ("quit", "exit"):
+                print(f"{b}: Closing Connection...")
+                break
+
+            client.sendall(msg.encode("utf-8"))
+
+            reply = client.recv(data_payload)
+            reply_decoded = reply.decode("utf-8")
+
+            if not reply:
+                print(f"{b}: Server closed connection.")
+                break
+
+            print(f"{reply_decoded}")
+
+    except:
+        print(f"\n{b}: Interrupted by user")
+    finally:
+        client.close()
+        print(f"{b}: Bye!")
 
 if __name__ == "__main__":
     main()
