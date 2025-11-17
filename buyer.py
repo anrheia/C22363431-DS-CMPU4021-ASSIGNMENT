@@ -15,18 +15,23 @@ import argparse
 host = 'localhost'
 port = 5000
 data_payload = 2048
-b = "[BUYER]"
 
 def main():
+    
+    buyer = str(input("Enter your name: "))
+    b = f"[{buyer}]"
+
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
     server_address = (host,port)
     client.connect(server_address)
+
+    client.sendall(b.encode("utf-8"))
     print(f"{b}: connected to server {host} port {port}")
 
     try:
         while True:
-            msg = input(str(f"{b}: "))
+            msg = str(input(f"{b}: "))
 
             if not msg:
                 continue
@@ -47,7 +52,7 @@ def main():
             print(f"{reply_decoded}")
 
     except:
-        print(f"\n{b}: Interrupted by user")
+        print(f"\n{b}: [INTERRUPTED BY CLIENT]")
     finally:
         client.close()
         print(f"{b}: Bye!")

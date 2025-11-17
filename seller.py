@@ -9,7 +9,7 @@ Module: Distributed Systems, CMPU4021
 """
 
 import socket
-import sys
+import sys  
 import argparse
 import threading
 
@@ -19,23 +19,39 @@ data_payload = 2048
 
 s = "[SELLER]"
 
+inventory = {
+    "FLOUR": 5,
+    "SUGAR": 5,
+    "POTATO": 5,
+    "OIL": 5
+}
+
 def handle_client(conn,addr):
-    print(f"{s}: New client connected - {addr}")
+
+    buyer_name = conn.recv(data_payload).decode("utf-8").strip()
+    print(f"{s}: New buyer connected - {buyer_name}")
 
     try:
         while True:
             msg = conn.recv(data_payload)
 
             if not msg:
-                print(f"{s}: Client {addr} disconnected.")
+                print(f"{s}: Client {buyer_name} disconnected.")
                 break
 
             msg_decoded = msg.decode("utf-8")
-            print(f"{s}: From {addr} - {msg_decoded}")
+            print(f"{buyer_name}: {msg_decoded}") 
 
-            reply = f"{s}: welcomes you."
+            if msg_decoded.lower() == "list":
+                item_line = [f"- {item} ({stock})" for item, stock in inventory.items()]
+                items_display = "\n".join(item_line)
+                reply = f"{s}: Items for sale \n{items_display}"
+
+            else:
+                reply = f"{s}: Unknown Command. try list"
+            
             conn.sendall(reply.encode("utf-8"))
-
+            
     except Exception as e:
         print(f"{s}: Error with client {addr}")
     finally:
