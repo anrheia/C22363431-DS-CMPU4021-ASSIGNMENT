@@ -12,6 +12,8 @@ import socket
 import sys  
 import argparse
 import threading
+import time
+import random 
 
 host = 'localhost'
 port = 5000 # hard-coded default port
@@ -19,12 +21,51 @@ data_payload = 2048
 
 s = "[SELLER]"
 
+#item inventory
 inventory = {
     "FLOUR": 5,
     "SUGAR": 5,
     "POTATO": 5,
     "OIL": 5
 }
+
+#current item on sale
+current_item = None
+sale_end_time = 0
+lock = threading.Lock() #protects shared state when multiple buyers connect
+
+def sale_timer_loop():
+    while True:
+        time.sleep(1)
+
+        with lock:
+            if current_item is None:
+                continue
+
+            expired = time.time() >= sale_end_time
+            item = current_item
+
+        if expired:
+            print(f"{s}: Sale for {item} ended.")
+            new_sale()
+
+def new_sale():
+    global current_item, sale_end_time # refers to global variable, not local
+
+    with lock:
+        available_items = [item for item, stock in inventory.items() if stock > 0]
+
+        if not available_items:
+            current_item = None 
+            sale_end_time = 0
+            print(f"{s}: No items left to sell.")
+            return
+        current_item = random.choice(available_items)
+
+        duration = random.randint(10, 60)
+        sale_end_time = time.time() + duration
+
+    print(f"{s}: NEW SALE -> {current_item} for {duration}s. ")
 
 def handle_client(conn,addr):
 
@@ -42,13 +83,22 @@ def handle_client(conn,addr):
             msg_decoded = msg.decode("utf-8")
             print(f"{buyer_name}: {msg_decoded}") 
 
-            if msg_decoded.lower() == "list":
+            if msg_decoded.lower() == "inventory":
                 item_line = [f"- {item} ({stock})" for item, stock in inventory.items()]
                 items_display = "\n".join(item_line)
-                reply = f"{s}: Items for sale \n{items_display}"
+                reply = f"{s}: Item Inventory \n{items_display}"
 
+            elif msg_decoded.lower() == "sale":
+                with lock:
+                    if current_item is None:
+                        reply = f"{s}: No active sale at the moment."
+                    else:
+                        remaining = max(0, int(sale_end_time - time.time()))
+                        stock_left = inventory.get(current_item, 0)
+                        reply = (f"{s}: CURRENT SALE -> {current_item} "
+                                 f"Stock: {stock_left}, time left: {remaining}s")
             else:
-                reply = f"{s}: Unknown Command. try list"
+                reply = f"{s}: Unknown Command. Try: inventory, sale, buy, quit/exit."
             
             conn.sendall(reply.encode("utf-8"))
             
@@ -70,6 +120,10 @@ def main():
     #binds the socket to the address above 
     print(f"Starting TCP Connection for {s} %s port %s" % server_address)
     server.bind(server_address)
+
+    new_sale()
+    timer_thread = threading.Thread(target=sale_timer_loop, daemon=True)
+    timer_thread.start()
 
     # enables a server to accept connections 
     server.listen()
