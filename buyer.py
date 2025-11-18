@@ -23,21 +23,21 @@ def receiver(client, b):
             seller_reply = client.recv(data_payload)
 
             if not seller_reply:
-                print(f"\n{b}: Server closed connection.")
+                print(f"\n> Server closed connection.")
                 break
             
             msg = seller_reply.decode("utf-8")
             # Print seller message on a new line
             print(f"\n{msg}")
             # Re-print prompt so user knows they can type again
-            print(f"{b}: ", end="", flush=True)
+            print(f"> ", end="", flush=True)
 
     except Exception as e:
         pass
 
 def main():
     buyer = str(input("Enter your name: "))
-    b = f"[{buyer}]"
+    b = f"{buyer}"
 
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
@@ -45,7 +45,7 @@ def main():
     client.connect(server_address)
 
     client.sendall(b.encode("utf-8"))
-    print(f"{b}: connected to server {host} port {port}")
+    print(f"{b}, you have connected to shop!")
 
     # start the background receiver thread
     recv_thread = threading.Thread(target=receiver, args=(client, b), daemon=True)
@@ -53,14 +53,14 @@ def main():
 
     try:
         while True:
-            print(f"{b}: ", end="", flush=True)
+            print(f"> ", end="", flush=True)
             msg = input().strip()
 
             if not msg:
                 continue
 
             if msg.lower() in ("quit", "exit"):
-                print(f"{b}: Closing Connection...")
+                print(f"> Closing Connection...")
                 break
 
             client.sendall(msg.encode("utf-8"))
@@ -68,10 +68,10 @@ def main():
             # moved the replies and broadcast to def receiver()
 
     except:
-        print(f"\n{b}: [INTERRUPTED BY CLIENT]")
+        print(f"\n> [INTERRUPTED BY CLIENT]")
     finally:
         client.close()
-        print(f"{b}: Bye!")
+        print(f"[SELLER]: Bye!")
 
 if __name__ == "__main__":
     main()
