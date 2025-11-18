@@ -20,19 +20,41 @@ port = 5000 # hard-coded default port
 data_payload = 2048
 
 s = "[SELLER]"
+buyers = [] # list of all active buyers
 
-#item inventory
+#item inventory dict
 inventory = {
-    "FLOUR": 5,
-    "SUGAR": 5,
-    "POTATO": 5,
-    "OIL": 5
+    "FLOUR": random.randint(1, 10),
+    "SUGAR": random.randint(1, 10),
+    "POTATO": random.randint(1, 10),
+    "OIL": random.randint(1, 10)
 }
 
 #current item on sale
 current_item = None
 sale_end_time = 0
 lock = threading.Lock() #protects shared state when multiple buyers connect
+
+# sends an automatic message to all connected buyers
+def broadcast(msg):
+    dead = [] # gonna be a list of all broken connections
+
+    with lock:
+        for b in buyers:
+            try:
+                b.sendall(msg.encode("utf-8"))
+            except OSError:
+                dead.append(b) #if the buyer (b) is disconnected move them to dead list also
+
+        for b in dead:
+            if b in buyers:
+                buyers.remove(b) # remove the disconnected buyer from active clients lsit
+                try:
+                    b.close()
+                except OSError:
+                    pass
+
+    
 
 def sale_timer_loop():
     while True:
@@ -46,7 +68,9 @@ def sale_timer_loop():
             item = current_item
 
         if expired:
-            print(f"{s}: Sale for {item} ended.")
+            end_msg = f"{s}: Sale for {item} ended."
+            print(end_msg)
+            broadcast(end_msg)
             new_sale()
 
 def new_sale():
@@ -65,12 +89,17 @@ def new_sale():
         duration = random.randint(10, 60)
         sale_end_time = time.time() + duration
 
-    print(f"{s}: NEW SALE -> {current_item} for {duration}s. ")
+    msg = f"{s}: NEW SALE -> {current_item} for {duration}s. "
+    print(msg)
+    broadcast(msg)
+
 
 def handle_client(conn,addr):
-
     buyer_name = conn.recv(data_payload).decode("utf-8").strip()
     print(f"{s}: New buyer connected - {buyer_name}")
+
+    with lock:
+        buyers.append(conn) # if a new buyer has connected, add them to the buyers list
 
     try:
         while True:
@@ -97,13 +126,16 @@ def handle_client(conn,addr):
                         stock_left = inventory.get(current_item, 0)
                         reply = (f"{s}: CURRENT SALE -> {current_item} "
                                  f"Stock: {stock_left}, time left: {remaining}s")
+                        
+            elif msg_decoded.lower() == "commands":
+                reply = f"{s}: Try: inventory, sale, buy, quit/exit."            
             else:
-                reply = f"{s}: Unknown Command. Try: inventory, sale, buy, quit/exit."
+                reply = f"{s}: Unknown Command. Try: commands, inventory, sale, buy, quit/exit."
             
             conn.sendall(reply.encode("utf-8"))
             
     except Exception as e:
-        print(f"{s}: Error with client {addr}")
+        pass
     finally:
         conn.close()
         print(f"{s}: Connection with client {addr} closed.")
@@ -114,8 +146,6 @@ def main():
     # For a TCP* socket, AF_INET = internet address family for IPV4, SOCK_STREAM = socket type for TCP
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_address = (host, port)
-
-    # setsockopt: makes it so that it avoids the bind() exception error where it says address is already in use
 
     #binds the socket to the address above 
     print(f"Starting TCP Connection for {s} %s port %s" % server_address)

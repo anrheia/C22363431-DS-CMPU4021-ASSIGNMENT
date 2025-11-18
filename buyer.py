@@ -10,14 +10,32 @@ Module: Distributed Systems, CMPU4021
 
 import socket
 import sys
-import argparse
+import threading # for the background receiver of my broadcast
 
 host = 'localhost'
 port = 5000
 data_payload = 2048
 
+# a background thread that listen for messages from the seller and prints them
+def receiver(client, b):
+    try:
+        while True:
+            seller_reply = client.recv(data_payload)
+
+            if not seller_reply:
+                print(f"\n{b}: Server closed connection.")
+                break
+            
+            msg = seller_reply.decode("utf-8")
+            # Print seller message on a new line
+            print(f"\n{msg}")
+            # Re-print prompt so user knows they can type again
+            print(f"{b}: ", end="", flush=True)
+
+    except Exception as e:
+        pass
+
 def main():
-    
     buyer = str(input("Enter your name: "))
     b = f"[{buyer}]"
 
@@ -29,9 +47,14 @@ def main():
     client.sendall(b.encode("utf-8"))
     print(f"{b}: connected to server {host} port {port}")
 
+    # start the background receiver thread
+    recv_thread = threading.Thread(target=receiver, args=(client, b), daemon=True)
+    recv_thread.start()
+
     try:
         while True:
-            msg = str(input(f"{b}: "))
+            print(f"{b}: ", end="", flush=True)
+            msg = input().strip()
 
             if not msg:
                 continue
@@ -42,14 +65,7 @@ def main():
 
             client.sendall(msg.encode("utf-8"))
 
-            reply = client.recv(data_payload)
-            reply_decoded = reply.decode("utf-8")
-
-            if not reply:
-                print(f"{b}: Server closed connection.")
-                break
-
-            print(f"{reply_decoded}")
+            # moved the replies and broadcast to def receiver()
 
     except:
         print(f"\n{b}: [INTERRUPTED BY CLIENT]")
