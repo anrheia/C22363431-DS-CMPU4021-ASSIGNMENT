@@ -54,7 +54,12 @@ def broadcast(msg):
                 except OSError:
                     pass
 
-    
+"""
+
+SHOP PORTION: SETS UP NEW SALE ITEM + TIMER
+
+"""
+
 
 def sale_timer_loop():
     while True:
@@ -94,6 +99,13 @@ def new_sale():
     broadcast(msg)
 
 
+"""
+
+HANDLES ALL CLIENT/BUYER INPUTS
+
+"""
+
+
 def handle_client(conn,addr):
     buyer_name = conn.recv(data_payload).decode("utf-8").strip()
     print(f"{s}: New buyer connected - {buyer_name}")
@@ -128,7 +140,7 @@ def handle_client(conn,addr):
                                  f"Stock: {stock_left}, time left: {remaining}s")
                         
             elif msg_decoded.lower() == "commands":
-                reply = f"{s}: Try: inventory, sale, buy, quit/exit."            
+                reply = f"{s}: Try: inventory, sale, buy, buy <ITEM> <AMOUNT>, quit/exit,."            
             else:
                 reply = f"{s}: Unknown Command. Try: commands, inventory, sale, buy, quit/exit."
             
@@ -140,6 +152,13 @@ def handle_client(conn,addr):
         conn.close()
         print(f"{s}: Connection with client {addr} closed.")
     return
+
+
+"""
+
+MAIN CONSOLE, HANDLES THE CONNECTION AND THREADS
+
+"""
 
 def main():
 
