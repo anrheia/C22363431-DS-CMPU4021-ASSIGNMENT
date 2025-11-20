@@ -7,10 +7,8 @@ Date: 17/11/25
 Module: Distributed Systems, CMPU4021
 
 """
-
 import socket
 import sys  
-import argparse
 import threading
 import time
 import random 
@@ -19,15 +17,18 @@ host = 'localhost'
 port = 5000 # hard-coded default port
 data_payload = 2048
 
-s = "[SELLER]"
+s = None
 buyers = [] # list of all active buyers
+
+min_stock = 1
+max_stock = 20
 
 #item inventory dict
 inventory = {
-    "FLOUR": random.randint(1, 10),
-    "SUGAR": random.randint(1, 10),
-    "POTATO": random.randint(1, 10),
-    "OIL": random.randint(1, 10)
+    "FLOUR": random.randint(min_stock, max_stock),+
+    "SUGAR": random.randint(min_stock, max_stock),
+    "POTATO": random.randint(min_stock, max_stock),
+    "OIL": random.randint(min_stock, max_stock)
 }
 
 #current item on sale
@@ -42,7 +43,7 @@ def broadcast(msg):
     with lock:
         for b in buyers:
             try:
-                b.sendall(msg.encode("utf-8"))
+                b.sendall((msg + "\n").encode("utf-8"))
             except OSError:
                 dead.append(b) #if the buyer (b) is disconnected move them to dead list also
 
@@ -59,7 +60,6 @@ def broadcast(msg):
 SHOP PORTION: SETS UP NEW SALE ITEM + TIMER
 
 """
-
 
 def sale_timer_loop():
     while True:
@@ -82,13 +82,16 @@ def new_sale():
     global current_item, sale_end_time # refers to global variable, not local
 
     with lock:
+        # if the item in inventory's stock is greater than 0, add them to available items
         available_items = [item for item, stock in inventory.items() if stock > 0]
 
+        # if all the stock from the seller is gone
         if not available_items:
             current_item = None 
             sale_end_time = 0
             print(f"{s}: No items left to sell.")
             return
+        # current item will be a random item in available_items which has stock
         current_item = random.choice(available_items)
 
         duration = random.randint(10, 60)
@@ -98,13 +101,11 @@ def new_sale():
     print(msg)
     broadcast(msg)
 
-
 """
 
 HANDLES ALL CLIENT/BUYER INPUTS
 
 """
-
 
 def handle_client(conn,addr):
     buyer_name = conn.recv(data_payload).decode("utf-8").strip()
@@ -124,11 +125,13 @@ def handle_client(conn,addr):
             msg_decoded = msg.decode("utf-8")
             print(f"{buyer_name}: {msg_decoded}") 
 
+            # if the messsage is inventory, show all items in stock
             if msg_decoded.lower() == "inventory":
                 item_line = [f"- {item} ({stock})" for item, stock in inventory.items()]
                 items_display = "\n".join(item_line)
                 reply = f"{s}: Item Inventory \n{items_display}"
 
+            # if the message is sale, show active item on sale and time remaining on sale
             elif msg_decoded.lower() == "sale":
                 with lock:
                     if current_item is None:
@@ -139,20 +142,82 @@ def handle_client(conn,addr):
                         reply = (f"{s}: CURRENT SALE -> {current_item} "
                                  f"Stock: {stock_left}, time left: {remaining}s")
                         
+            # if the message starts with buy, split the message in parts
+            elif msg_decoded.lower().startswith("buy"):
+                parts = msg_decoded.strip().split()
+
+                #if the message is not in 3 parts send the reply
+                if len(parts) != 3:
+                    reply = f"{s}: USAGE - buy <ITEM> <AMOUNT>. EXAMPLE - buy potato 3"
+                    conn.sendall((reply + "\n").encode("utf-8"))
+                    continue
+
+                item = parts[1].upper()
+                        
+                try:
+                    amount = int(parts[2])
+                # if the amount isnt a number, state reply
+                except ValueError:
+                    reply = f"{s}: Amount must be a number. EXAMPLE - buy flour 2"
+                    conn.sendall((reply + "\n").encode("utf-8"))
+                    continue
+                
+                #if the amount is less than zero state reply
+                if amount <= 0:
+                    reply = f"{s}: Amount must be greater than 0"
+                    conn.sendall((reply + "\n").encode("utf-8"))
+                    continue
+            
+                purchase_success = False
+                remaining_after = None 
+
+                with lock:
+                    # if item not in inventory, tell user to check inventory
+                    if item not in inventory:
+                        reply = f"{s}: Unknown item '{item}'. Try: inventory."
+
+                    # if the item is not for sale tell user to check sale
+                    elif current_item is not None and item != current_item:
+                        reply = f"{s}: {item} is currently not on sale. Try: sale."
+
+                    # if the amount stated to buy is greater than the amount on stock tell them the available item on stock
+                    elif inventory[item] < amount:
+                        reply = f"{s}: Not enough {item} in stock, Available {inventory[item]}."
+
+                    # else proceed w purchase
+                    else:
+                        inventory[item] -= amount
+                        remaining_after = inventory[item]
+                        purchase_success = True
+                        reply = f"{s}: Purchase successful! You bought {amount} stocks of {item}."
+                
+                conn.sendall((reply + "\n").encode("utf-8"))
+
+                #if purchase was succesful send a broadcast to other buyers
+                if purchase_success:
+                    purchase_msg = f"{s}: {buyer_name} bought {amount} stocks of {item}. Remaining {item} stocks: {remaining_after} "
+                    broadcast(purchase_msg)
+
+                    if remaining_after == 0 and item == current_item:
+                        new_sale()
+                    
+                continue
+
             elif msg_decoded.lower() == "commands":
                 reply = f"{s}: Try: inventory, sale, buy, buy <ITEM> <AMOUNT>, quit/exit,."            
             else:
                 reply = f"{s}: Unknown Command. Try: commands, inventory, sale, buy, quit/exit."
             
-            conn.sendall(reply.encode("utf-8"))
+            conn.sendall((reply + "\n").encode("utf-8"))
             
     except Exception as e:
         pass
+
     finally:
         conn.close()
         print(f"{s}: Connection with client {addr} closed.")
-    return
 
+    return
 
 """
 
@@ -161,6 +226,19 @@ MAIN CONSOLE, HANDLES THE CONNECTION AND THREADS
 """
 
 def main():
+
+    global s, port
+
+    seller = input("Enter your name, seller: ")
+    if not seller:
+        name = "SELLER"
+    s = f"[{seller}]"
+
+    port_num = input("Enter port for this shop (e.g 5000): ").strip()
+    if not port_num:
+        port_num = "5000"
+
+    port = int(port_num)
 
     # For a TCP* socket, AF_INET = internet address family for IPV4, SOCK_STREAM = socket type for TCP
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

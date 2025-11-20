@@ -27,17 +27,26 @@ def receiver(client, b):
                 break
             
             msg = seller_reply.decode("utf-8")
-            # Print seller message on a new line
-            print(f"\n{msg}")
-            # Re-print prompt so user knows they can type again
-            print(f"> ", end="", flush=True)
 
+            for line in msg.splitlines():
+                if line.strip() == "":
+                    continue
+                print(f"\n{line}")
+
+            print(f"> ", end="", flush=True)
+   
     except Exception as e:
         pass
 
 def main():
-    buyer = str(input("Enter your name: "))
+    buyer = input("Enter your name: ")
     b = f"{buyer}"
+
+    port_num = input("Enter port for this shop (e.g 5000): ").strip()
+    if not port_num:
+        port_num = "5000"
+
+    port = int(port_num)
 
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
@@ -54,7 +63,7 @@ def main():
     try:
         while True:
             print(f"> ", end="", flush=True)
-            msg = input().strip()
+            msg = input().strip()   
 
             if not msg:
                 continue
