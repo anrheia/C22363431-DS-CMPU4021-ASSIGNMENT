@@ -25,7 +25,7 @@ max_stock = 20
 
 #item inventory dict
 inventory = {
-    "FLOUR": random.randint(min_stock, max_stock),+
+    "FLOUR": random.randint(min_stock, max_stock),
     "SUGAR": random.randint(min_stock, max_stock),
     "POTATO": random.randint(min_stock, max_stock),
     "OIL": random.randint(min_stock, max_stock)
